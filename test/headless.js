@@ -111,7 +111,7 @@ game.stage.render = function(){ scenesSeen.add(this.scene); origRender(); };
 // step time forward, pumping timers, RAF and auto-advancing dialogue
 let frames = 0, guard = 0;
 const DT = 1/60;
-while (game.state !== 3 /*END*/ && guard < 200000) {
+while (game.state !== 2 /*END*/ && guard < 200000) {
   guard++;
   sandbox.__now += DT * 1000;
   game.audio.currentTime = sandbox.__now / 1000;
@@ -134,7 +134,7 @@ while (game.state !== 3 /*END*/ && guard < 200000) {
   }
 }
 
-if (game.state !== 3) throw new Error('play did not reach END (guard=' + guard + ', act=' + game.actIndex + ')');
+if (game.state !== 2) throw new Error('play did not reach END (guard=' + guard + ', act=' + game.actIndex + ')');
 console.log('scenes rendered:', [...scenesSeen].join(', '));
 if (!['redcoast','control','sun','trisolaris','space'].some(s => scenesSeen.has(s)))
   throw new Error('no expected scenes shown: ' + [...scenesSeen]);

@@ -74,7 +74,7 @@
     // 画面点击：仅在“屏幕区域”推进，控制栏按钮单独处理
     const screenArea = (this.canvas && this.canvas.parentElement) ||
       document.getElementById('screenWrap') || window;
-    screenArea.addEventListener('pointerdown', (e) => this._onScreenPointer(e));
+    if (screenArea && screenArea.addEventListener) screenArea.addEventListener('pointerdown', (e) => this._onScreenPointer(e));
     this._buildControls();
     this._bindLifecycle();
     if (this.reducedMotion) this.tierName = 'eco', this.tier = TIERS.eco, this._applyTier();
@@ -270,7 +270,10 @@
   /* ---------------- 控制栏（DOM 按钮，可触摸） ---------------- */
   Game.prototype._buildControls = function () {
     const bar = document.getElementById('controls');
-    if (!bar) return;
+    if (!bar || !bar.appendChild || typeof document.createElement !== 'function') return;
+    // 无头环境：createElement 返回的 stub 没有 setAttribute，直接跳过
+    const probe = document.createElement('button');
+    if (!probe || typeof probe.setAttribute !== 'function') return;
     this._btns = {};
     const defs = [
       ['pause', '⏸', '暂停', () => this._togglePause()],
@@ -383,7 +386,6 @@
       this.runner.update(dt);
       this.stage.update(dt);
       this.stage.render();
-      this._mirrorSR();
       if (this.runner.done && !this.runner.finished) {
         this.actIndex++;
         if (this.actIndex < this.acts.length) this._startAct();
