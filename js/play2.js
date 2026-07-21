@@ -150,8 +150,12 @@
     ui.hideSubtitle();
 
     // 监听员的警告，逐条浮现（绿色系统文字）
+    // 第一声警告：时间几近凝固，只有屏幕上的字与心跳（关键停顿帧）
+    S.setSlowmo(0.12, 1.5);
+    sfx.heartbeat();
     ui.say('⚠ 来自三体', '不要回答！不要回答！不要回答！', C_WARN, null);
     yield box();
+    S.setSlowmo(1, 2);
     ui.say('⚠ 来自三体', '这个世界收到了你们的信息。我是这个世界的一个和平主义者。', C_SYS, null);
     yield box();
     ui.say('⚠ 来自三体', '我是你们文明的第一个收听者。是我，把即将到来的毁灭警告给你们。', C_SYS, null);
@@ -161,8 +165,9 @@
     ui.say('⚠ 来自三体', '只要不回答，你们的世界就不会暴露方位。这是唯一能拯救你们的方法。', C_SYS, null);
     yield box();
 
-    // 切到地球——叶文洁面对屏幕上的警告
-    yield tween(1.6, (p) => { S._transition = E.easeIn(p); S._transColor = '#0a0e16'; });
+    // 切到地球——叶文洁面对屏幕上的警告（信号干扰转场：这本身就是一次接收）
+    S.setTransMode('signal');
+    yield tween(1.8, (p) => { S._transition = E.easeIn(p); S._transColor = '#0a0e16'; });
     S.setScene('control');
     S.clearActors();
     const ye = S.addActor('ye', 'ye');
@@ -171,7 +176,8 @@
     S.vign.set(0.45, 3);
     S.setGrade([20, 40, 60], [150, 220, 255], 0.4, 4);
     S.env.showTri = false;
-    yield tween(1.6, (p) => { S._transition = 1 - E.easeOut(p); });
+    yield tween(1.8, (p) => { S._transition = 1 - E.easeOut(p); });
+    S.setTransMode('fade');
     yield wait(0.6);
 
     ui.say('叶文洁', '（一个宇宙文明，在恳求我不要回答。他在拯救我们。）', C_YE, 'ye');
@@ -179,8 +185,10 @@
     ui.say('叶文洁', '（可我，看透了人类的一切。我不再相信我们能靠自己变好。）', C_YE, 'ye');
     yield box();
 
-    // 抉择的心跳
-    sfx.heartbeat(); yield wait(0.8); sfx.heartbeat(); yield wait(0.8);
+    // 抉择的心跳——世界凝固，只剩心跳（关键停顿帧）
+    S.setSlowmo(0.1, 2.5);
+    S.vign.set(0.62, 2);
+    sfx.heartbeat(); yield wait(1.0); sfx.heartbeat(); yield wait(1.0);
 
     ui.setSubtitle('她抬起了手。发射键，就在指尖之下。');
     yield tween(2.4, (p) => { ye.armRaise = E.easeInOut(p); });
@@ -190,6 +198,8 @@
     // 那句改变人类命运的话
     ui.say('叶文洁', '到这里来吧——我将帮助你们，获得这个世界。', C_YE, 'ye');
     yield box();
+    S.setSlowmo(1, 1.5);          // 抉择已定，时间重新流动
+    S.vign.set(0.45, 2);
 
     // 按下：闪光、电波射向星海
     sfx.transmit && sfx.transmit();
@@ -198,7 +208,8 @@
     yield tween(0.8, (p) => { S.d.fx.flash = 0.7 * (1 - p); });
     yield wait(0.6);
 
-    // 切回宇宙深空：电波射向三体星
+    // 切回宇宙深空：电波射向三体星（信号溶解）
+    S.setTransMode('dissolve');
     yield tween(2.0, (p) => { S._transition = E.easeIn(p); S._transColor = '#eaf0ff'; S.d.fx.flash = E.easeInOut(p) * 0.5; });
     S.setScene('space');
     S.clearActors();
@@ -207,6 +218,7 @@
     S.setTint([120, 150, 220], 0.15, 4);
     S.bloom.set(0.35, 4);
     yield tween(2.5, (p) => { S._transition = 1 - E.easeOut(p); S.d.fx.flash = 0.5 * (1 - p); });
+    S.setTransMode('fade');
 
     // 电波环从画面中心射向三体星系
     S._waveOut = true;

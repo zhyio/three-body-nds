@@ -62,6 +62,29 @@
     // 把档位映射到 display 的后期强度上限
     this.display.tier = this.tier;
     this.display.reducedMotion = this.reducedMotion;
+    HE._reducedMotion = this.reducedMotion;
+  };
+
+  // 视差驱动：指针（桌面）+ 设备方向（移动）→ 归一化到 (-1..1)，喂给 stage
+  Game.prototype._bindParallax = function () {
+    if (this.reducedMotion) return;
+    const el = (this.canvas && this.canvas.parentElement) || window;
+    const feed = (nx, ny) => { if (this.stage && this.stage.setParallax) this.stage.setParallax(nx, ny); };
+    if (el.addEventListener) {
+      el.addEventListener('pointermove', (e) => {
+        const r = (el.getBoundingClientRect && el.getBoundingClientRect()) || { left: 0, top: 0, width: innerWidth, height: innerHeight };
+        const nx = ((e.clientX - r.left) / (r.width || 1)) * 2 - 1;
+        const ny = ((e.clientY - r.top) / (r.height || 1)) * 2 - 1;
+        feed(Math.max(-1, Math.min(1, nx)), Math.max(-1, Math.min(1, ny)));
+      });
+      el.addEventListener('pointerleave', () => feed(0, 0));
+    }
+    if (window.addEventListener && window.DeviceOrientationEvent) {
+      window.addEventListener('deviceorientation', (e) => {
+        if (e.gamma == null) return;
+        feed(Math.max(-1, Math.min(1, e.gamma / 30)), Math.max(-1, Math.min(1, ((e.beta || 0) - 45) / 30)));
+      });
+    }
   };
 
   Game.prototype.boot = function () {
@@ -77,6 +100,7 @@
     if (screenArea && screenArea.addEventListener) screenArea.addEventListener('pointerdown', (e) => this._onScreenPointer(e));
     this._buildControls();
     this._bindLifecycle();
+    this._bindParallax();
     if (this.reducedMotion) this.tierName = 'eco', this.tier = TIERS.eco, this._applyTier();
   };
 

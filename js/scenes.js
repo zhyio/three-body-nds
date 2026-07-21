@@ -29,12 +29,14 @@
     G.ditherV(ctx, 0, 0, 320, 70, top, mid, 14);
     G.ditherV(ctx, 0, 64, 320, 40, mid, bot, 10);
 
-    // 星空（破晓时渐隐）
+    // 星空（破晓时渐隐；大星视差偏移更明显，营造纵深）
+    const rpx = env.px || 0, rpy = env.py || 0;
     ctx.globalAlpha = 1 - dawn * 0.9;
     for (const s of rcStars) {
       const tw = 0.4 + 0.6 * Math.sin(t * 2 + s.ph);
       ctx.globalAlpha = (1 - dawn * 0.9) * tw;
-      G.rect(ctx, s.x, s.y, s.s, s.s, s.c);
+      const depth = s.s > 1 ? 3.5 : 1.5;
+      G.rect(ctx, s.x - rpx * depth, s.y - rpy * depth, s.s, s.s, s.c);
     }
     ctx.globalAlpha = 1;
 
@@ -233,20 +235,29 @@
     const top = HE.color.mix('#1a1a3e', '#3a0a12', chaos);
     const bot = HE.color.mix('#3a2a4a', '#c8481e', chaos);
     G.ditherV(ctx, 0, 0, 320, 120, top, bot, 16);
-    // 星空（乱纪元被强光冲淡）
+    // 星空（乱纪元被强光冲淡）；随视差轻移
+    const tpx = (env.px || 0) * 6, tpy = (env.py || 0) * 3;
     ctx.globalAlpha = 0.8 * (1 - chaos);
-    for (const s of triStars) { const tw = 0.4 + 0.6 * Math.sin(t * 2 + s.ph); ctx.globalAlpha = (1 - chaos) * tw; G.rect(ctx, s.x, s.y, s.s, s.s, s.c); }
+    for (const s of triStars) { const tw = 0.4 + 0.6 * Math.sin(t * 2 + s.ph); ctx.globalAlpha = (1 - chaos) * tw; G.rect(ctx, s.x - tpx, s.y - tpy, s.s, s.s, s.c); }
     ctx.globalAlpha = 1;
 
-    // === 三颗太阳（不同大小/相位，缓慢游移） ===
+    // === 三颗太阳（差异化：远近层次 + 不同速度 + 不规则李萨如轨迹） ===
+    // depth(远) 决定视差响应与大小；每颗用两组不同频率的正弦叠加成不规则轨迹
+    const px = env.px || 0, py = env.py || 0;
     const suns = [
-      { bx: 60, by: 34, r: lerp(6, 15, chaos), c: '#ff7a3a', sp: 0.13, ph: 0 },
-      { bx: 180, by: 26, r: lerp(4, 20, chaos), c: '#ffd24a', sp: 0.09, ph: 2 },
-      { bx: 260, by: 44, r: lerp(3, 12, chaos), c: '#ff5a4a', sp: 0.17, ph: 4 },
+      // 近：大、动得快、视差最强、轨迹幅度大
+      { bx: 60,  by: 36, r: lerp(7, 16, chaos), c: '#ff7a3a', d: 1.0,  ax: 34, ay: 12, s1: 0.15, s2: 0.23, ph: 0 },
+      // 中：中等
+      { bx: 182, by: 26, r: lerp(4, 20, chaos), c: '#ffd24a', d: 0.6,  ax: 24, ay: 7,  s1: 0.10, s2: 0.17, ph: 2 },
+      // 远：小、动得慢、视差最弱、几乎在天顶徘徊
+      { bx: 258, by: 46, r: lerp(3, 11, chaos), c: '#ff5a4a', d: 0.32, ax: 16, ay: 5,  s1: 0.07, s2: 0.045, ph: 4 },
     ];
     for (const s of suns) {
-      const x = s.bx + Math.sin(t * s.sp + s.ph) * 30;
-      const y = s.by + Math.cos(t * s.sp * 0.7 + s.ph) * 8;
+      // 不规则轨迹：两个不同频率/相位的正弦叠加（李萨如），避免单一正弦摆动
+      const x = s.bx + Math.sin(t * s.s1 + s.ph) * s.ax + Math.sin(t * s.s2 * 1.7 + s.ph * 2) * s.ax * 0.35
+              - px * 20 * s.d;
+      const y = s.by + Math.cos(t * s.s1 * 0.8 + s.ph) * s.ay + Math.cos(t * s.s2 * 2.1 + s.ph) * s.ay * 0.4
+              - py * 10 * s.d;
       // 大范围灼热光晕（乱纪元时刺目）
       ctx.globalAlpha = 0.4 + chaos * 0.5;
       G.gradR(ctx, x, y, s.r * 4, HE.color.rgba(255, 190, 110, 0.55), 'rgba(255,120,40,0)');
@@ -315,25 +326,30 @@
   const spaceStars = makeStars(1024, 110, 320, 180);
   Scenes.space = function (ctx, env) {
     const t = env.t;
+    const px = env.px || 0, py = env.py || 0;
     G.ditherV(ctx, 0, 0, 320, 180, '#07091a', '#141838', 12);
-    // 星云（冷紫/暗红交错，更浓更亮）
+    // 星云（冷紫/暗红交错，更浓更亮）；最远层，随视差极轻移
+    const nx = px * 3, ny = py * 1.5;
     ctx.globalAlpha = 0.34;
-    G.gradR(ctx, 90, 60, 140, 'rgba(110,84,180,0.7)', 'rgba(110,84,180,0)');
-    G.gradR(ctx, 210, 120, 150, 'rgba(178,78,110,0.6)', 'rgba(178,78,110,0)');
+    G.gradR(ctx, 90 - nx, 60 - ny, 140, 'rgba(110,84,180,0.7)', 'rgba(110,84,180,0)');
+    G.gradR(ctx, 210 - nx, 120 - ny, 150, 'rgba(178,78,110,0.6)', 'rgba(178,78,110,0)');
     ctx.globalAlpha = 0.22;
-    G.gradR(ctx, 60, 130, 100, 'rgba(72,130,180,0.6)', 'rgba(72,130,180,0)');
-    G.gradR(ctx, 250, 40, 90, 'rgba(150,120,200,0.5)', 'rgba(150,120,200,0)');
+    G.gradR(ctx, 60 - nx, 130 - ny, 100, 'rgba(72,130,180,0.6)', 'rgba(72,130,180,0)');
+    G.gradR(ctx, 250 - nx, 40 - ny, 90, 'rgba(150,120,200,0.5)', 'rgba(150,120,200,0)');
     ctx.globalAlpha = 1;
-    // 银河尘带（斜向的淡星尘）
+    // 银河尘带（斜向的淡星尘）——中层视差
     const dr = HE.rng(555);
+    const mx = px * 8, my = py * 4;
     ctx.globalAlpha = 0.22;
-    for (let i = 0; i < 120; i++) { const p = dr(); const x = p * 320, y = 40 + p * 110 + (dr() - 0.5) * 40; G.px(ctx, x, y, '#8a9ad0'); }
+    for (let i = 0; i < 120; i++) { const p = dr(); const x = p * 320, y = 40 + p * 110 + (dr() - 0.5) * 40; G.px(ctx, x - mx, y - my, '#8a9ad0'); }
     ctx.globalAlpha = 1;
-    // 星
+    // 星：按大小分层视差（大星更近、位移更大）
     for (const s of spaceStars) {
       const tw = 0.5 + 0.5 * Math.sin(t * 2 + s.ph);
-      ctx.globalAlpha = 0.5 + 0.5 * tw; G.rect(ctx, s.x, s.y, s.s, s.s, s.c);
-      if (s.s > 1) { ctx.globalAlpha = tw * 0.6; G.px(ctx, s.x - 1, s.y, s.c); G.px(ctx, s.x + 1, s.y, s.c); G.px(ctx, s.x, s.y - 1, s.c); G.px(ctx, s.x, s.y + 1, s.c); }
+      const dep = s.s > 1 ? 14 : 6;
+      const sx = s.x - px * dep, sy = s.y - py * (dep * 0.5);
+      ctx.globalAlpha = 0.5 + 0.5 * tw; G.rect(ctx, sx, sy, s.s, s.s, s.c);
+      if (s.s > 1) { ctx.globalAlpha = tw * 0.6; G.px(ctx, sx - 1, sy, s.c); G.px(ctx, sx + 1, sy, s.c); G.px(ctx, sx, sy - 1, s.c); G.px(ctx, sx, sy + 1, s.c); }
     }
     ctx.globalAlpha = 1;
     // 两三颗明亮的近星（带光晕十字，提亮画面）

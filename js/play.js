@@ -77,7 +77,8 @@
     ye.setEmote('shock', 2);
     yield wait(0.4);
 
-    // 切到控制室内景
+    // 切到控制室内景：用"信号干扰"转场（呼应监听/发射母题）
+    S.setTransMode('signal');
     yield tween(1.2, (p) => { S._transition = E.easeIn(p); S._transColor = '#0a0e16'; });
     S.setScene('control');
     S.clearActors();
@@ -85,8 +86,10 @@
     ye2.x = 150; ye2.y = 150; ye2.scale = 1.5; ye2.face = 1;
     S.cam.reset();
     S.vign.set(0.45, 3);
-    S.setGrade([20, 40, 60], [150, 220, 255], 0.4, 4);
+    // 地球终端：冷绿终端光（与三体的橙红形成冲突）
+    S.setGrade([16, 44, 40], [140, 235, 200], 0.42, 4);
     yield tween(1.2, (p) => { S._transition = 1 - E.easeOut(p); });
+    S.setTransMode('fade');
     yield wait(0.6);
 
     ui.say('叶文洁', '（屏幕上，是发给太阳的坐标。发射键，就在指尖之下。）', C_YE, 'ye');
@@ -98,13 +101,17 @@
     ui.say('叶文洁', '也许……我们这个物种，需要一种外来的力量，来干预这疯狂的世界。', C_YE, 'ye');
     yield box();
 
-    // 按下发射键：心跳、警示灯、蓄能
+    // 按下发射键：先来一个"停顿帧"——世界几乎静止，只剩心跳
     ye2.armRaise = 0;
     yield tween(1.4, (p) => { ye2.armRaise = E.easeInOut(p); });
+    S.setSlowmo(0.08, 3);          // 关键停顿：动画近乎凝固
+    S.vign.set(0.6, 2);
     sfx.heartbeat();
-    yield wait(0.5); sfx.heartbeat();
-    yield wait(0.5);
+    yield wait(0.7); sfx.heartbeat();
+    yield wait(0.7);
     sfx.transmit && sfx.transmit();
+    S.setSlowmo(1, 2);             // 恢复
+    S.vign.set(0.3, 2);
     S.d.fx.flash = 0.5;
     yield tween(0.5, (p) => { S.d.fx.flash = 0.5 * (1 - p); });
 
