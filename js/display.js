@@ -104,6 +104,8 @@
     this._t += dt;
     const fx = this.fx;
     const src = this.ctx;
+    // 性能/画质档位（由 main 设置）：缺省全强度
+    const tier = this.tier || { scan: 1, vignMul: 1, bloom: true, grain: 1 };
 
     // --- 灯光层：把主缓冲拷到 lbuf 再叠加分级/色调 ---
     this.lctx.globalCompositeOperation = 'source-over';
@@ -144,9 +146,10 @@
 
     // 晕影
     if (fx.vignette > 0) {
+      const vig = fx.vignette * tier.vignMul;
       const g = this.lctx.createRadialGradient(IW / 2, IH / 2, IH * 0.35, IW / 2, IH / 2, IH * 0.85);
       g.addColorStop(0, 'rgba(0,0,0,0)');
-      g.addColorStop(1, `rgba(0,0,0,${fx.vignette})`);
+      g.addColorStop(1, `rgba(0,0,0,${vig})`);
       this.lctx.fillStyle = g;
       this.lctx.fillRect(0, 0, IW, IH);
     }
@@ -157,8 +160,8 @@
     octx.imageSmoothingEnabled = false;
     octx.clearRect(0, 0, this.out.width, this.out.height);
 
-    // bloom：把亮部放大叠加（用整帧 screen 近似）
-    if (fx.bloom > 0) {
+    // bloom：把亮部放大叠加（用整帧 screen 近似）；省电档关闭
+    if (fx.bloom > 0 && tier.bloom) {
       octx.globalAlpha = 1;
       octx.drawImage(this.lbuf, 0, 0, this.out.width, this.out.height);
       octx.globalCompositeOperation = 'lighter';
@@ -184,14 +187,18 @@
       octx.drawImage(this.lbuf, 0, 0, this.out.width, this.out.height);
     }
 
-    // 扫描线
-    octx.globalAlpha = 1;
-    const pat = octx.createPattern(this.scan, 'repeat');
-    if (pat) {
-      const m = (typeof DOMMatrix !== 'undefined') ? new DOMMatrix() : null;
-      if (m && pat.setTransform) { m.a = s / 4; m.d = s / 4; pat.setTransform(m); }
-      octx.fillStyle = pat;
-      octx.fillRect(0, 0, this.out.width, this.out.height);
+    // 扫描线（强度随档位；图案缓存复用）
+    if (tier.scan > 0.01) {
+      octx.globalAlpha = tier.scan;
+      if (!this._scanPat) this._scanPat = octx.createPattern(this.scan, 'repeat');
+      const pat = this._scanPat;
+      if (pat) {
+        const m = (typeof DOMMatrix !== 'undefined') ? new DOMMatrix() : null;
+        if (m && pat.setTransform) { m.a = s / 4; m.d = s / 4; pat.setTransform(m); }
+        octx.fillStyle = pat;
+        octx.fillRect(0, 0, this.out.width, this.out.height);
+      }
+      octx.globalAlpha = 1;
     }
 
     // 闪光

@@ -25,10 +25,25 @@
     this.letterbox = 0;
     this.charDelay = 0.048;
     this._blink = 0;
+    this.log = [];          // 对白记录（{speaker,text,color}）
+    this.fast = false;      // 快进：更快打字 + 弱化打字音
+    this.hud = null;        // 幕进度 {actIndex, actTotal, actName}
+    this.logOpen = false;   // 记录面板开关
+    this._logScroll = 0;    // 记录面板滚动位置
+    this._logMax = 0;       // 记录面板最大滚动量
+    this.autoPlay = false;  // 自动播放
+    this.paused = false;    // 暂停
   }
+
+  // 暂停/自动/快进状态由 main 设置
+  UI.prototype.setPaused = function (p) { this.paused = !!p; };
+  UI.prototype.setAuto = function (p) { this.autoPlay = !!p; };
+  UI.prototype.setFast = function (p) { this.fast = !!p; };
 
   UI.prototype.say = function (speaker, text, color, portrait) {
     this.box = { speaker, text, color: color || '#c2ede4', shown: 0, done: false, t: 0, portrait: portrait || null, appear: 0 };
+    // 记入对白记录（旁白与角色台词都记，去掉纯空文本）
+    if (text && text.trim()) this.log.push({ speaker: speaker || '', text, color: color || '#c2ede4' });
   };
   UI.prototype.clearBox = function () { this.box = null; };
   UI.prototype.setSubtitle = function (text) { this.subtitle = text ? { text, a: 0, target: 1 } : (this.subtitle && (this.subtitle.target = 0), this.subtitle); };
@@ -50,11 +65,12 @@
       if (!this.box.done) {
         this.box.t += dt;
         const total = this.box.text.length;
-        const target = Math.floor(this.box.t / this.charDelay);
+        const delay = this.fast ? this.charDelay * 0.35 : this.charDelay;
+        const target = Math.floor(this.box.t / delay);
         if (target > this.box.shown) {
           const ch = this.box.text[this.box.shown];
           this.box.shown = Math.min(total, target);
-          if (ch && ch.trim() && this.sfx && (this.box.shown % 2 === 0)) this.sfx.blip(false);
+          if (ch && ch.trim() && this.sfx && !this.fast && (this.box.shown % 2 === 0)) this.sfx.blip(false);
         }
         if (this.box.shown >= total) this.box.done = true;
       }
@@ -111,6 +127,135 @@
     if (this.chapter && this.chapter.a > 0.02) this._drawChapter(ctx, W, H);
     if (this.titleCard && this.titleCard.a > 0.02) this._drawTitle(ctx, W, H);
     if (this.roll) this._drawRoll(ctx, W, H);
+    // HUD：幕进度（左上，半透明；记录面板/片尾时隐藏）
+    if (this.hud && !this.logOpen && !this.roll) this._drawHud(ctx, W, H);
+    if (this.autoPlay && !this.logOpen) this._drawAutoBadge(ctx, W, H);
+    if (this.logOpen) this._drawLogPanel(ctx, W, H);
+    if (this.paused && !this.logOpen) this._drawPauseOverlay(ctx, W, H);
+  };
+
+  // 由 main 设置的 HUD 数据：{actIndex, actTotal, actName}
+  UI.prototype.setHud = function (o) { this.hud = o; };
+
+  // ---------- 幕进度 HUD ----------
+  UI.prototype._drawHud = function (ctx, W, H) {
+    const h = this.hud;
+    ctx.save();
+    ctx.globalAlpha = 0.72;
+    ctx.font = `600 6.5px ${F_TITLE}`;
+    ctx.textAlign = 'left';
+    const label = `第 ${['一', '二', '三'][h.actIndex] || (h.actIndex + 1)} 幕 / 共 ${h.actTotal} 幕`;
+    ctx.fillStyle = 'rgba(4,8,14,0.5)';
+    this._roundRect(ctx, 4, 4, ctx.measureText(label).width + 10, 11, 2); ctx.fill();
+    ctx.fillStyle = '#9fb0c8';
+    ctx.fillText(label, 9, 12);
+    // 三段进度点
+    for (let i = 0; i < h.actTotal; i++) {
+      ctx.fillStyle = i <= h.actIndex ? '#e08a6a' : 'rgba(160,176,200,0.35)';
+      ctx.beginPath(); ctx.arc(11 + i * 6, 19, 1.6, 0, 7); ctx.fill();
+    }
+    ctx.restore();
+  };
+
+  UI.prototype._drawAutoBadge = function (ctx, W, H) {
+    ctx.save();
+    ctx.globalAlpha = 0.6 + 0.4 * (0.5 + 0.5 * Math.sin(this._blink * 3));
+    ctx.font = `600 6px ${F_TITLE}`;
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#7fd0b0';
+    ctx.fillText('▶ 自动', W - 6, 12);
+    ctx.restore();
+  };
+
+  // ---------- 暂停遮罩 ----------
+  UI.prototype._drawPauseOverlay = function (ctx, W, H) {
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = '#04060c';
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#e8eef4';
+    ctx.font = `700 13px ${F_TITLE}`;
+    ctx.textAlign = 'center';
+    ctx.fillText('暂 停', W / 2, H / 2 - 2);
+    ctx.globalAlpha = 0.7;
+    ctx.font = `400 6.5px ${F_BODY}`;
+    ctx.fillStyle = '#9fb0c8';
+    ctx.fillText('轻触继续 · 或按 P / 空格', W / 2, H / 2 + 12);
+    ctx.restore();
+  };
+
+  // ---------- 对白记录面板 ----------
+  UI.prototype.toggleLog = function () { this.logOpen = !this.logOpen; this._logScroll = 0; return this.logOpen; };
+  UI.prototype.scrollLog = function (dy) { if (this.logOpen) this._logScroll = clamp(this._logScroll + dy, 0, this._logMax || 0); };
+  UI.prototype._drawLogPanel = function (ctx, W, H) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(4,6,12,0.92)';
+    ctx.fillRect(0, 0, W, H);
+    // 标题
+    ctx.fillStyle = '#e8eef4';
+    ctx.font = `700 9px ${F_TITLE}`;
+    ctx.textAlign = 'left';
+    ctx.fillText('对白记录', 10, 14);
+    ctx.textAlign = 'right';
+    ctx.globalAlpha = 0.6;
+    ctx.font = `400 6px ${F_BODY}`;
+    ctx.fillStyle = '#8fa0b8';
+    ctx.fillText('轻触空白处 / 按 L 关闭', W - 8, 13);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = 'rgba(120,140,170,0.3)'; ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(8, 18); ctx.lineTo(W - 8, 18); ctx.stroke();
+
+    // 内容区裁剪
+    const top = 22, bot = H - 6, lh = 12;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, top, W, bot - top); ctx.clip();
+    let y = top + 4 - (this._logScroll || 0);
+    ctx.textAlign = 'left';
+    const log = this.log || [];
+    for (const e of log) {
+      // 说话人
+      ctx.font = `700 6.5px ${F_TITLE}`;
+      ctx.fillStyle = e.color || '#c8d4e0';
+      const who = e.speaker ? e.speaker + '：' : '';
+      const whoW = ctx.measureText(who).width;
+      if (who) ctx.fillText(who, 10, y + 6);
+      // 文本（换行）
+      ctx.font = `400 6.5px ${F_BODY}`;
+      ctx.fillStyle = '#d6dee8';
+      const lines = this._wrapCount(ctx, e.text, W - 20 - whoW);
+      let first = true;
+      for (const ln of lines) {
+        ctx.fillText(ln, first ? 10 + whoW : 10, y + 6);
+        y += lh; first = false;
+      }
+      if (lines.length === 0) y += lh;
+      y += 2;
+    }
+    this._logMax = Math.max(0, (y + (this._logScroll || 0)) - bot + 4);
+    ctx.restore();
+
+    // 滚动提示
+    if ((this._logMax || 0) > 0) {
+      ctx.globalAlpha = 0.5; ctx.fillStyle = '#8fa0b8';
+      ctx.font = `400 6px ${F_BODY}`; ctx.textAlign = 'center';
+      ctx.fillText('▲▼ 滚动', W / 2, H - 2);
+    }
+    ctx.restore();
+  };
+
+  // 返回按 maxW 折行后的行数组（供记录面板用）
+  UI.prototype._wrapCount = function (ctx, str, maxW) {
+    const out = []; let line = '';
+    for (let i = 0; i < str.length; i++) {
+      const ch = str[i];
+      if (ch === '\n') { out.push(line); line = ''; continue; }
+      const test = line + ch;
+      if (ctx.measureText(test).width > maxW) { out.push(line); line = ch; }
+      else line = test;
+    }
+    if (line) out.push(line);
+    return out;
   };
 
   // ---------- 片尾滚动字幕 ----------

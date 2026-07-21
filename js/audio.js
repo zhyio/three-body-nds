@@ -29,6 +29,7 @@
     this.ready = false;
     this.muted = false;
     this._duty = {}; // 缓存占空比波形
+    this._masterVol = 0.9;
   }
 
   Audio.prototype.init = function () {
@@ -54,6 +55,27 @@
 
   Audio.prototype.resume = function () { if (this.ac && this.ac.state === 'suspended') this.ac.resume(); };
   Audio.prototype.now = function () { return this.ac ? this.ac.currentTime : 0; };
+
+  // 真静音：控制 master 增益（已排程/循环的声音也会被压下），平滑过渡避免爆音
+  Audio.prototype.setMuted = function (m) {
+    this.muted = !!m;
+    if (this.master && this.ac) {
+      const now = this.ac.currentTime;
+      const target = this.muted ? 0.0001 : this._masterVol;
+      this.master.gain.cancelScheduledValues(now);
+      this.master.gain.setValueAtTime(Math.max(0.0001, this.master.gain.value), now);
+      this.master.gain.exponentialRampToValueAtTime(Math.max(0.0001, target), now + 0.12);
+    }
+  };
+  Audio.prototype.toggleMuted = function () { this.setMuted(!this.muted); return this.muted; };
+
+  // 后台暂停：挂起 AudioContext（停止一切声音与时钟），返回前台再恢复
+  Audio.prototype.suspendContext = function () {
+    if (this.ac && this.ac.state === 'running' && this.ac.suspend) return this.ac.suspend();
+  };
+  Audio.prototype.resumeContext = function () {
+    if (this.ac && this.ac.state === 'suspended') this.ac.resume();
+  };
 
   // 生成指定占空比的 PeriodicWave（方波），duty: 0.125/0.25/0.5
   Audio.prototype._pulseWave = function (duty) {
